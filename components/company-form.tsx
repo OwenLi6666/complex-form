@@ -1,5 +1,6 @@
 "use client"
 
+import * as React from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
@@ -29,12 +30,42 @@ const formSchema = z.object({
   companyAddress: z.string().min(1, "公司地址不能为空"),
   serviceAddress: z.string().optional(),
   productType: z.enum(["客梯", "自动扶梯", "自动人行道"]),
-  weight: z.string(),
-  earlyPayment: z.string().regex(/^\d+$/, "金额必须是数字"),
-  latePayment: z.string().regex(/^\d+$/, "金额必须是数字"),
+  weight: z.string()
+    .refine((val) => {
+      if (val === "custom") return true;
+      const num = Number(val);
+      return !isNaN(num) && num >= 200 && num <= 10000;
+    }, "载重必须在200至10000之间"),
+  customWeight: z.string()
+    .regex(/^\d+$/, "载重必须是数字")
+    .refine((val) => {
+      const num = Number(val);
+      return !isNaN(num) && num >= 200 && num <= 10000;
+    }, "载重必须在200至10000之间")
+    .optional(),
+  earlyPayment: z.string()
+    .regex(/^\d+$/, "轿厢宽度必须是数字")
+    .refine((val) => {
+      const num = Number(val);
+      return !isNaN(num) && num >= 1000 && num <= 2000;
+    }, "轿厢宽度必须在1000至2000之间"),
+  latePayment: z.string()
+    .regex(/^\d+$/, "轿厢深度必须是数字")
+    .refine((val) => {
+      const num = Number(val);
+      return !isNaN(num) && num >= 1000 && num <= 2500;
+    }, "轿厢深度必须在1000至2500之间")
+    .optional(),
 })
 
+type PaymentOptions = {
+  early: string | string[];
+  late: string | string[];
+}
+
 export function CompanyForm() {
+  const [isCustomWeight, setIsCustomWeight] = React.useState(false);
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -45,19 +76,75 @@ export function CompanyForm() {
       serviceAddress: "",
       productType: "客梯",
       weight: "630",
+      customWeight: "",
       earlyPayment: "",
       latePayment: "",
     },
   })
 
   function onSubmit(values: z.infer<typeof formSchema>) {
-    console.log(values)
+    const finalValues = {
+      ...values,
+      weight: values.weight === "custom" ? values.customWeight : values.weight,
+    };
+    console.log(finalValues);
   }
 
   const productType = form.watch("productType")
-  const weightOptions = productType === "客梯" 
-    ? ["630", "1000", "1250"]
-    : ["1000", "2000"]
+  const weight = form.watch("weight")
+
+  // 根据产品类型和载重确定可选的款项
+  const getPaymentOptions = (): PaymentOptions => {
+    if (productType === "客梯") {
+      switch (weight) {
+        case "630":
+          return { early: "1100", late: "1400" }
+        case "1000":
+          return { early: "1200", late: "2100" }
+        case "1250":
+          return {
+            early: ["1200", "1600"],
+            late: ["2100", "1400"]
+          }
+        default:
+          return { early: "", late: "" }
+      }
+    }
+    return { early: "", late: "" }
+  }
+
+  // 获取载重选项
+  const getWeightOptions = () => {
+    return ["630", "1000", "1250", "custom"]
+  }
+
+  const weightOptions = getWeightOptions()
+  const paymentOptions = getPaymentOptions()
+
+  // 当产品类型改变时，重置载重和款项
+  React.useEffect(() => {
+    if (productType === "客梯") {
+      form.setValue("weight", "630")
+      setIsCustomWeight(false)
+    } else {
+      form.setValue("weight", "")
+      form.setValue("customWeight", "")
+      form.setValue("earlyPayment", "")
+      form.setValue("latePayment", "")
+    }
+  }, [productType, form])
+
+  // 当载重改变时，更新款项
+  React.useEffect(() => {
+    if (productType === "客梯") {
+      setIsCustomWeight(weight === "custom")
+      const options = getPaymentOptions()
+      if (typeof options.early === "string" && options.early) {
+        form.setValue("earlyPayment", options.early)
+        form.setValue("latePayment", options.late as string)
+      }
+    }
+  }, [weight, productType, form])
 
   return (
     <Form {...form}>
@@ -157,60 +244,135 @@ export function CompanyForm() {
           )}
         />
 
-        <FormField
-          control={form.control}
-          name="weight"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>载重（千克）</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="选择载重" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {weightOptions.map((weight) => (
-                    <SelectItem key={weight} value={weight}>
-                      {weight}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        {productType === "客梯" && (
+          <>
+            <div className="space-y-4">
+              <FormField
+                control={form.control}
+                name="weight"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>载重（千克）</FormLabel>
+                    <Select onValueChange={(value) => {
+                      field.onChange(value);
+                      setIsCustomWeight(value === "custom");
+                    }} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="选择载重" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="630">630</SelectItem>
+                        <SelectItem value="1000">1000</SelectItem>
+                        <SelectItem value="1250">1250</SelectItem>
+                        <SelectItem value="custom">自定义</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-        <div className="grid grid-cols-2 gap-4">
-          <FormField
-            control={form.control}
-            name="earlyPayment"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>初期款认选项</FormLabel>
-                <FormControl>
-                  <Input type="number" min="0" placeholder="请输入金额" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+              {isCustomWeight && (
+                <FormField
+                  control={form.control}
+                  name="customWeight"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          min="200" 
+                          max="10000" 
+                          placeholder="请输入载重（200-10000）" 
+                          {...field} 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+            </div>
 
-          <FormField
-            control={form.control}
-            name="latePayment"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>新期款认选项</FormLabel>
-                <FormControl>
-                  <Input type="number" min="0" placeholder="请输入金额" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </div>
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="earlyPayment"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>轿厢宽度(毫米)</FormLabel>
+                    <FormControl>
+                      {Array.isArray(paymentOptions.early) ? (
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="选择宽度" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {paymentOptions.early.map((amount) => (
+                              <SelectItem key={amount} value={amount}>
+                                {amount}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Input 
+                          type="number" 
+                          min="1000" 
+                          max="2000" 
+                          placeholder="请输入宽度（1000-2000）" 
+                          {...field} 
+                        />
+                      )}
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="latePayment"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>轿厢深度(毫米)</FormLabel>
+                    <FormControl>
+                      {Array.isArray(paymentOptions.late) ? (
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="选择深度" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {paymentOptions.late.map((amount) => (
+                              <SelectItem key={amount} value={amount}>
+                                {amount}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Input 
+                          type="number" 
+                          min="1000" 
+                          max="2500" 
+                          placeholder="请输入深度（1000-2500）" 
+                          {...field} 
+                        />
+                      )}
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+          </>
+        )}
 
         <Button type="submit">提交</Button>
       </form>
