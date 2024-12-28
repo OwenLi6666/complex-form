@@ -73,8 +73,27 @@ export function CompanyForm() {
   }, [productType, form])
 
   function onSubmit(values: z.infer<typeof formSchema>) {
-    console.log(values)
-    alert("表单提交成功！")
+    const formattedValues = {
+      公司名称: values.companyName,
+      电话号码: values.phoneNumber,
+      分机号: values.phoneExt || '无',
+      公司地址: values.companyAddress,
+      账单地址: values.shippingAddress || '同公司地址',
+      产品类型: values.productType,
+      ...(values.productType === '客梯' ? {
+        载重: values.weight === 'custom' 
+          ? `${values.customWeight}千克（自定义）` 
+          : `${values.weight}千克`,
+        轿厢宽度: `${values.width}毫米`,
+        轿厢深度: `${values.depth}毫米`
+      } : {})
+    }
+
+    const message = Object.entries(formattedValues)
+      .map(([key, value]) => `${key}: ${value}`)
+      .join('\n')
+
+    alert('表单提交成功！\n\n' + message)
   }
 
   const handleWeightChange = (value: string) => {
