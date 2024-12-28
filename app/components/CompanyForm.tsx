@@ -21,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 
 const formSchema = z.object({
   companyName: z.string().min(1, "公司姓名为必填项"),
@@ -30,14 +30,16 @@ const formSchema = z.object({
   companyAddress: z.string().min(1, "公司地址为必填项"),
   shippingAddress: z.string().optional(),
   productType: z.enum(["客梯", "自动扶梯", "自动人行道"]),
-  weight: z.enum(["630", "1000", "1250", "custom"]),
+  weight: z.enum(["630", "1000", "1250", "custom"]).optional(),
   customWeight: z.number().min(200).max(10000).optional(),
-  width: z.string(),
-  depth: z.string(),
+  width: z.string().optional(),
+  depth: z.string().optional(),
 })
 
 export function CompanyForm() {
   const [selectedWeight, setSelectedWeight] = useState("630")
+  const [isElevator, setIsElevator] = useState(true)
+  const [showWidthSelect, setShowWidthSelect] = useState(false)
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -48,6 +50,27 @@ export function CompanyForm() {
       depth: "1400",
     },
   })
+
+  const productType = form.watch("productType")
+
+  useEffect(() => {
+    const isElevatorType = productType === "客梯"
+    setIsElevator(isElevatorType)
+    setShowWidthSelect(false)
+    
+    if (!isElevatorType) {
+      form.setValue("weight", undefined)
+      form.setValue("customWeight", undefined)
+      form.setValue("width", undefined)
+      form.setValue("depth", undefined)
+      setSelectedWeight("")
+    } else {
+      form.setValue("weight", "630")
+      form.setValue("width", "1100")
+      form.setValue("depth", "1400")
+      setSelectedWeight("630")
+    }
+  }, [productType, form])
 
   function onSubmit(values: z.infer<typeof formSchema>) {
     console.log(values)
@@ -62,16 +85,30 @@ export function CompanyForm() {
     if (value === "630") {
       width = "1100"
       depth = "1400"
+      setShowWidthSelect(false)
     } else if (value === "1000") {
       width = "1200"
       depth = "2100"
+      setShowWidthSelect(false)
     } else if (value === "1250") {
+      setShowWidthSelect(true)
       width = "1200"
       depth = "2100"
+    } else {
+      setShowWidthSelect(false)
     }
 
     form.setValue("width", width)
     form.setValue("depth", depth)
+  }
+
+  const handleWidthChange = (value: string) => {
+    form.setValue("width", value)
+    if (value === "1200") {
+      form.setValue("depth", "2100")
+    } else {
+      form.setValue("depth", "1400")
+    }
   }
 
   return (
@@ -170,84 +207,112 @@ export function CompanyForm() {
           )}
         />
 
-        <FormField
-          control={form.control}
-          name="weight"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>载重（千克）</FormLabel>
-              <Select onValueChange={(value) => {
-                field.onChange(value)
-                handleWeightChange(value)
-              }} defaultValue={field.value}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="选择载重" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  <SelectItem value="630">630</SelectItem>
-                  <SelectItem value="1000">1000</SelectItem>
-                  <SelectItem value="1250">1250</SelectItem>
-                  <SelectItem value="custom">自定义</SelectItem>
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        {isElevator && (
+          <>
+            <FormField
+              control={form.control}
+              name="weight"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>载重（千克）</FormLabel>
+                  <Select onValueChange={(value) => {
+                    field.onChange(value)
+                    handleWeightChange(value)
+                  }} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="选择载重" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="630">630</SelectItem>
+                      <SelectItem value="1000">1000</SelectItem>
+                      <SelectItem value="1250">1250</SelectItem>
+                      <SelectItem value="custom">自定义</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-        {selectedWeight === "custom" && (
-          <FormField
-            control={form.control}
-            name="customWeight"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>自定义载重（千克）</FormLabel>
-                <FormControl>
-                  <Input 
-                    type="number" 
-                    placeholder="输入载重(200-10000)" 
-                    {...field}
-                    onChange={e => field.onChange(parseFloat(e.target.value))}
-                  />
-                </FormControl>
-                <FormDescription>
-                  载重范围：200至10000千克
-                </FormDescription>
-                <FormMessage />
-              </FormItem>
+            {selectedWeight === "custom" && (
+              <FormField
+                control={form.control}
+                name="customWeight"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>自定义载重（千克）</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="number" 
+                        placeholder="输入载重(200-10000)" 
+                        {...field}
+                        onChange={e => field.onChange(parseFloat(e.target.value))}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      载重范围：200至10000千克
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             )}
-          />
+
+            {showWidthSelect ? (
+              <FormField
+                control={form.control}
+                name="width"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>轿厢宽度（毫米）</FormLabel>
+                    <Select onValueChange={handleWidthChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="选择轿厢宽度" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="1200">1200</SelectItem>
+                        <SelectItem value="1600">1600</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            ) : (
+              <FormField
+                control={form.control}
+                name="width"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>轿厢宽度（毫米）</FormLabel>
+                    <FormControl>
+                      <Input {...field} readOnly />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+
+            <FormField
+              control={form.control}
+              name="depth"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>轿厢深度（毫米）</FormLabel>
+                  <FormControl>
+                    <Input {...field} readOnly />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </>
         )}
-
-        <FormField
-          control={form.control}
-          name="width"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>轿厢宽度（毫米）</FormLabel>
-              <FormControl>
-                <Input {...field} readOnly />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="depth"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>轿厢深度（毫米）</FormLabel>
-              <FormControl>
-                <Input {...field} readOnly />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
 
         <Button type="submit">提交</Button>
       </form>
