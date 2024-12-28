@@ -25,16 +25,27 @@ import { useState, useEffect } from "react"
 
 const formSchema = z.object({
   companyName: z.string().min(1, "公司姓名为必填项"),
-  phoneNumber: z.string().regex(/^\+?[1-9]\d{1,14}$/, "请输入有效的电话号码"),
-  phoneExt: z.string().regex(/^\d+$/, "分机号必须是数字"),
   companyAddress: z.string().min(1, "公司地址为必填项"),
+  areaCode: z.string()
+    .min(1, "电话区号为必填项")
+    .regex(/^\+\d+$/, "请输入有效的国际电话区号（以+开头）"),
+  phoneNumber: z.string()
+    .min(1, "电话号码为必填项")
+    .regex(/^\d+$/, "电话号码必须是纯数字"),
+  sameAsCompanyAddress: z.boolean().default(true),
   shippingAddress: z.string().optional(),
   productType: z.enum(["客梯", "自动扶梯", "自动人行道"]),
   weight: z.enum(["630", "1000", "1250", "custom"]).optional(),
   customWeight: z.number().min(200).max(10000).optional(),
   width: z.string().optional(),
   depth: z.string().optional(),
-})
+}).refine(
+  (data) => !(data.sameAsCompanyAddress === false && !data.shippingAddress),
+  {
+    message: "请填写账单地址",
+    path: ["shippingAddress"],
+  }
+)
 
 export function CompanyForm() {
   const [selectedWeight, setSelectedWeight] = useState("630")
@@ -48,6 +59,7 @@ export function CompanyForm() {
       weight: "630",
       width: "1100",
       depth: "1400",
+      sameAsCompanyAddress: true,
     },
   })
 
@@ -75,9 +87,9 @@ export function CompanyForm() {
   function onSubmit(values: z.infer<typeof formSchema>) {
     const formattedValues = {
       公司名称: values.companyName,
-      电话号码: values.phoneNumber,
-      分机号: values.phoneExt || '无',
       公司地址: values.companyAddress,
+      电话区号: values.areaCode,
+      电话号码: values.phoneNumber,
       账单地址: values.shippingAddress || '同公司地址',
       产品类型: values.productType,
       ...(values.productType === '客梯' ? {
@@ -149,34 +161,6 @@ export function CompanyForm() {
 
         <FormField
           control={form.control}
-          name="phoneNumber"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>电话号码</FormLabel>
-              <FormControl>
-                <Input placeholder="请输入电话号码" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="phoneExt"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>分机号</FormLabel>
-              <FormControl>
-                <Input placeholder="请输入分机号" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
           name="companyAddress"
           render={({ field }) => (
             <FormItem>
@@ -189,14 +173,66 @@ export function CompanyForm() {
           )}
         />
 
+        <div className="space-y-4">
+          <FormField
+            control={form.control}
+            name="sameAsCompanyAddress"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                <FormControl>
+                  <input
+                    type="checkbox"
+                    checked={field.value}
+                    onChange={field.onChange}
+                    className="h-4 w-4 mt-1"
+                  />
+                </FormControl>
+                <div className="space-y-1 leading-none">
+                  <FormLabel>账单地址与公司地址相同</FormLabel>
+                </div>
+              </FormItem>
+            )}
+          />
+
+          {!form.watch("sameAsCompanyAddress") && (
+            <FormField
+              control={form.control}
+              name="shippingAddress"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>账单地址</FormLabel>
+                  <FormControl>
+                    <Input placeholder="请输入账单地址" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
+        </div>
+
         <FormField
           control={form.control}
-          name="shippingAddress"
+          name="areaCode"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>账单地址</FormLabel>
+              <FormLabel>电话区号</FormLabel>
               <FormControl>
-                <Input placeholder="如与公司地址相同则无需填写" {...field} />
+                <Input placeholder="请输入电话区号（如：+86）" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="phoneNumber"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>电话号码</FormLabel>
+              <FormControl>
+                <Input placeholder="请输入电话号码" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -271,7 +307,7 @@ export function CompanyForm() {
                       />
                     </FormControl>
                     <FormDescription>
-                      载重范围：200至10000千克
+                      载重范围：200-10000千克
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
